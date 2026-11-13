@@ -1,0 +1,26 @@
+[Unit]
+Description=Nocturne Café - ASP.NET Core Web API (EC2 #2)
+After=network.target
+
+[Service]
+Type=simple
+User=nocturne
+WorkingDirectory=/opt/nocturne/api
+# Non-secret settings (committed template: deployment/systemd/api.env.example)
+EnvironmentFile=/etc/nocturne/api.env
+# Secrets are pulled from AWS Secrets Manager into a root-only tmpfs file right before start (never stored in git or on disk).
+RuntimeDirectory=nocturne
+RuntimeDirectoryMode=0750
+ExecStartPre=+/opt/nocturne/scripts/fetch-secrets.sh
+EnvironmentFile=-/run/nocturne/secrets.env
+ExecStart=/usr/bin/dotnet /opt/nocturne/api/NocturneCafe.Api.dll
+Restart=always
+RestartSec=5
+SyslogIdentifier=nocturne-api
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/nocturne
+
+[Install]
+WantedBy=multi-user.target

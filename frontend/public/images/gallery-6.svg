@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="Nocturne Café artwork"><defs>
+<radialGradient id="bgg5" cx="70%" cy="35%" r="90%"><stop offset="0" stop-color="#241a12"/><stop offset="1" stop-color="#0D0B0B"/></radialGradient>
+<linearGradient id="goldg5" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C8A66A"/><stop offset=".5" stop-color="#D5AC70"/><stop offset="1" stop-color="#F2E8D8"/></linearGradient>
+<filter id="blurg5"><feGaussianBlur stdDeviation="40"/></filter></defs><rect width="800" height="800" fill="url(#bgg5)"/><path d="M0 560 Q200 480 400 560 T800 540 V800 H0Z" fill="#D5AC70" opacity=".12"/><g transform="translate(235 252.5)" fill="none" stroke="url(#goldg5)" stroke-width="4.5" stroke-linecap="round">
+<path d="M0 30 H330 V140.25 Q330 255 165 255 Q0 255 0 140.25 Z" fill="rgba(213,172,112,.08)"/>
+<path d="M330 60 q90 0 90 60 t-90 60"/>
+<ellipse cx="165" cy="30" rx="165" ry="18" fill="rgba(213,172,112,.15)"/>
+<ellipse cx="165" cy="273" rx="230.99999999999997" ry="15" stroke-opacity=".5"/>
+<path d="M99 -15 q-27 -45 0 -82.5 t0 -82.5" stroke-opacity="0.8"/><path d="M165 -15 q-27 -45 0 -82.5 t0 -82.5" stroke-opacity="0.6000000000000001"/><path d="M230.99999999999997 -15 q-27 -45 0 -82.5 t0 -82.5" stroke-opacity="0.4"/></g></svg>

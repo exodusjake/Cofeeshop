@@ -1,0 +1,22 @@
+[Unit]
+Description=Nocturne Café - Next.js web (EC2 #1)
+After=network.target
+
+[Service]
+Type=simple
+User=nocturne
+WorkingDirectory=/opt/nocturne/web
+# API_INTERNAL_URL = private address of the API EC2, e.g. http://10.0.2.15:5000   (no secrets live on this server)
+EnvironmentFile=/etc/nocturne/web.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/node /opt/nocturne/web/server.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+App_Data/
+TestResults/
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+.env
+.env.local
+.env.*.local
+# Secrets and local config — never commit
+appsettings.*.local.json
+*.pfx
+*.pem
+secrets.json
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log

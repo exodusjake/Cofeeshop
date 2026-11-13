@@ -1,0 +1,195 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Nocturne Café - one VPC, two EC2 instances (Web in the public subnet, API in a private subnet)
+  and one Amazon RDS for SQL Server instance in private DB subnets. No other application servers.
+
+Parameters:
+  AdminCidr:
+    Type: String
+    Description: Your public IP /32 allowed to SSH to the Web EC2. Use 127.0.0.1/32 to disable SSH entirely (SSM Session Manager is enabled).
+    Default: 127.0.0.1/32
+  WebInstanceType: { Type: String, Default: t3.small }
+  ApiInstanceType: { Type: String, Default: t3.medium }
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+  DbEngine:
+    Type: String
+    Default: sqlserver-ex
+    AllowedValues: [sqlserver-ex, sqlserver-web, sqlserver-se]
+    Description: sqlserver-ex = Express (free, 10 GB cap, dev/small shops). Use web/se for production growth.
+  DbEngineVersion: { Type: String, Default: 16.00.4305.5.v1 }
+  DbInstanceClass: { Type: String, Default: db.t3.medium }
+  DbAllocatedStorage: { Type: Number, Default: 20, MinValue: 20 }
+  DbMultiAz:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Express edition does not support Multi-AZ.
+  DbMasterUsername: { Type: String, Default: nocturne_admin }
+
+Conditions:
+  IsExpress: !Equals [!Ref DbEngine, sqlserver-ex]
+
+Resources:
+  # ------------------------------------------------------------------ Network
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties: { CidrBlock: 10.0.0.0/16, EnableDnsSupport: true, EnableDnsHostnames: true, Tags: [{ Key: Name, Value: nocturne-vpc }] }
+  Igw: { Type: AWS::EC2::InternetGateway }
+  IgwAttach: { Type: AWS::EC2::VPCGatewayAttachment, Properties: { VpcId: !Ref Vpc, InternetGatewayId: !Ref Igw } }
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties: { VpcId: !Ref Vpc, CidrBlock: 10.0.1.0/24, AvailabilityZone: !Select [0, !GetAZs ""], MapPublicIpOnLaunch: false, Tags: [{ Key: Name, Value: nocturne-public-web }] }
+  AppSubnet:
+    Type: AWS::EC2::Subnet
+    Properties: { VpcId: !Ref Vpc, CidrBlock: 10.0.2.0/24, AvailabilityZone: !Select [0, !GetAZs ""], Tags: [{ Key: Name, Value: nocturne-private-api }] }
+  DbSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties: { VpcId: !Ref Vpc, CidrBlock: 10.0.3.0/24, AvailabilityZone: !Select [0, !GetAZs ""], Tags: [{ Key: Name, Value: nocturne-private-db-a }] }
+  DbSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties: { VpcId: !Ref Vpc, CidrBlock: 10.0.4.0/24, AvailabilityZone: !Select [1, !GetAZs ""], Tags: [{ Key: Name, Value: nocturne-private-db-b }] }
+
+  NatEip: { Type: AWS::EC2::EIP, DependsOn: IgwAttach, Properties: { Domain: vpc } }
+  Nat:
+    Type: AWS::EC2::NatGateway
+    Properties: { AllocationId: !GetAtt NatEip.AllocationId, SubnetId: !Ref PublicSubnet }   # outbound-only access for the private API (updates, Secrets Manager, SES)
+
+  PublicRt: { Type: AWS::EC2::RouteTable, Properties: { VpcId: !Ref Vpc } }
+  PublicRoute: { Type: AWS::EC2::Route, DependsOn: IgwAttach, Properties: { RouteTableId: !Ref PublicRt, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref Igw } }
+  PublicRtAssoc: { Type: AWS::EC2::SubnetRouteTableAssociation, Properties: { SubnetId: !Ref PublicSubnet, RouteTableId: !Ref PublicRt } }
+  PrivateRt: { Type: AWS::EC2::RouteTable, Properties: { VpcId: !Ref Vpc } }
+  PrivateRoute: { Type: AWS::EC2::Route, Properties: { RouteTableId: !Ref PrivateRt, DestinationCidrBlock: 0.0.0.0/0, NatGatewayId: !Ref Nat } }
+  AppRtAssoc: { Type: AWS::EC2::SubnetRouteTableAssociation, Properties: { SubnetId: !Ref AppSubnet, RouteTableId: !Ref PrivateRt } }
+  DbRt: { Type: AWS::EC2::RouteTable, Properties: { VpcId: !Ref Vpc } }     # no internet route at all
+  DbRtAssocA: { Type: AWS::EC2::SubnetRouteTableAssociation, Properties: { SubnetId: !Ref DbSubnetA, RouteTableId: !Ref DbRt } }
+  DbRtAssocB: { Type: AWS::EC2::SubnetRouteTableAssociation, Properties: { SubnetId: !Ref DbSubnetB, RouteTableId: !Ref DbRt } }
+
+  # ------------------------------------------------------------------ Security groups
+  WebSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Web EC2 - public HTTP/HTTPS only (Next.js :3000 is NOT exposed)
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref AdminCidr, Description: Admin SSH (optional) }
+  ApiSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties: { GroupDescription: API EC2 - port 5000 only from the Web SG, VpcId: !Ref Vpc }
+  ApiIngressFromWeb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties: { GroupId: !Ref ApiSg, IpProtocol: tcp, FromPort: 5000, ToPort: 5000, SourceSecurityGroupId: !Ref WebSg, Description: Next.js and Nginx to API }
+  DbSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS SQL Server - 1433 only from the API SG
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 1433, ToPort: 1433, SourceSecurityGroupId: !Ref ApiSg, Description: API to SQL Server }
+
+  # ------------------------------------------------------------------ Release artifacts (private bucket, read by the instances)
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub nocturne-artifacts-${AWS::AccountId}-${AWS::Region}
+      PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true }
+      BucketEncryption: { ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 } }] }
+
+  # ------------------------------------------------------------------ IAM (least privilege)
+  WebRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: { Version: "2012-10-17", Statement: [{ Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }] }
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+      Policies:
+        - PolicyName: read-artifacts
+          PolicyDocument: { Version: "2012-10-17", Statement: [{ Effect: Allow, Action: s3:GetObject, Resource: !Sub "${ArtifactBucket.Arn}/*" }] }
+  WebProfile: { Type: AWS::IAM::InstanceProfile, Properties: { Roles: [!Ref WebRole] } }
+  ApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: { Version: "2012-10-17", Statement: [{ Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }] }
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+      Policies:
+        - PolicyName: read-artifacts
+          PolicyDocument: { Version: "2012-10-17", Statement: [{ Effect: Allow, Action: [s3:GetObject, s3:PutObject], Resource: !Sub "${ArtifactBucket.Arn}/*" }] }
+        - PolicyName: read-nocturne-secrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !GetAtt Database.MasterUserSecret.SecretArn
+                  - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:nocturne/app-*
+  ApiProfile: { Type: AWS::IAM::InstanceProfile, Properties: { Roles: [!Ref ApiRole] } }
+
+  # ------------------------------------------------------------------ Compute: exactly two EC2 instances
+  WebInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref WebInstanceType
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds: [!Ref WebSg]
+      IamInstanceProfile: !Ref WebProfile
+      MetadataOptions: { HttpTokens: required }          # IMDSv2 only
+      BlockDeviceMappings: [{ DeviceName: /dev/xvda, Ebs: { VolumeSize: 20, VolumeType: gp3, Encrypted: true } }]
+      Tags: [{ Key: Name, Value: nocturne-web }]
+  WebEip: { Type: AWS::EC2::EIP, Properties: { InstanceId: !Ref WebInstance, Domain: vpc } }
+
+  ApiInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref ApiInstanceType
+      SubnetId: !Ref AppSubnet
+      SecurityGroupIds: [!Ref ApiSg]
+      IamInstanceProfile: !Ref ApiProfile
+      MetadataOptions: { HttpTokens: required }
+      BlockDeviceMappings:
+        - { DeviceName: /dev/xvda, Ebs: { VolumeSize: 20, VolumeType: gp3, Encrypted: true } }
+        - { DeviceName: /dev/sdf, Ebs: { VolumeSize: 20, VolumeType: gp3, Encrypted: true, DeleteOnTermination: false } }   # uploads volume -> mount at /var/nocturne, snapshot daily (see docs)
+      Tags: [{ Key: Name, Value: nocturne-api }]
+
+  # ------------------------------------------------------------------ Amazon RDS for SQL Server
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: { DBSubnetGroupDescription: Private DB subnets in two AZs, SubnetIds: [!Ref DbSubnetA, !Ref DbSubnetB] }
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: nocturne-sql
+      Engine: !Ref DbEngine
+      EngineVersion: !Ref DbEngineVersion    # SQL Server 2022 (full version string required by RDS)
+      LicenseModel: license-included
+      DBInstanceClass: !Ref DbInstanceClass
+      AllocatedStorage: !Ref DbAllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      MultiAZ: !If [IsExpress, false, !Ref DbMultiAz]
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups: [!Ref DbSg]
+      MasterUsername: !Ref DbMasterUsername
+      ManageMasterUserPassword: true         # password lives in Secrets Manager, never in this template
+      BackupRetentionPeriod: 7
+      DeletionProtection: true
+      EnablePerformanceInsights: false
+      CopyTagsToSnapshot: true
+      Tags: [{ Key: Name, Value: nocturne-sql }]
+
+Outputs:
+  ArtifactBucketName: { Value: !Ref ArtifactBucket }
+  WebInstanceId: { Value: !Ref WebInstance }
+  ApiInstanceId: { Value: !Ref ApiInstance }
+  WebPublicIp: { Value: !Ref WebEip, Description: Point your domain's A record here }
+  ApiPrivateIp: { Value: !GetAtt ApiInstance.PrivateIp, Description: Use as API_PRIVATE_IP in Nginx and web.env }
+  RdsEndpoint: { Value: !GetAtt Database.Endpoint.Address }
+  DbSecretArn: { Value: !GetAtt Database.MasterUserSecret.SecretArn, Description: Set as NOCTURNE_DB_SECRET_ID on the API server }

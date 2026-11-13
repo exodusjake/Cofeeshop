@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="NocturneCafe.Api/NocturneCafe.Api.csproj" />
+  <Project Path="NocturneCafe.Application/NocturneCafe.Application.csproj" />
+  <Project Path="NocturneCafe.Domain/NocturneCafe.Domain.csproj" />
+  <Project Path="NocturneCafe.Infrastructure/NocturneCafe.Infrastructure.csproj" />
+  <Project Path="NocturneCafe.Tests/NocturneCafe.Tests.csproj" />
+</Solution>

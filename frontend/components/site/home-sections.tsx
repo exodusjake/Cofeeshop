@@ -58,6 +58,7 @@ function SectionRenderer({ section, data, first }: { section: Section; data: Hom
     case "story": return <Story c={c} />;
     case "featured": return data.featured.length ? <ProductGrid id="featured" c={c} products={data.featured} /> : null;
     case "signature": return data.signature.length ? <ProductGrid id="signature" c={c} products={data.signature} alt /> : null;
+    case "quote": return <QuoteBanner c={c} />;
     case "gallery": return data.gallery.length ? <GalleryStrip c={c} images={data.gallery} /> : null;
     case "promotions": return <Promotions c={c} promos={data.promotions} />;
     case "reviews": return data.reviews.length ? <Reviews c={c} reviews={data.reviews} /> : null;
@@ -72,16 +73,17 @@ function Hero({ c }: { c: Record<string, any> }) {
   return (
     <section className="relative -mt-18 flex min-h-[100svh] items-center overflow-hidden" aria-labelledby="hero-title">
       {c.backgroundImage && (
+        // Photo sits on the right on desktop (text left, cup right) and fills the screen on mobile.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={safeHref(c.backgroundImage)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img src={safeHref(c.backgroundImage)} alt="" className="absolute inset-y-0 right-0 h-full w-full object-cover object-[50%_62%] lg:w-[58%]" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/75 to-bg/20" />
-      <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-bg/60" />
+      <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/80 to-bg/10 lg:from-bg lg:via-bg lg:via-[32%] lg:to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-bg/50" />
       <div className="absolute -right-40 top-1/3 h-[28rem] w-[28rem] rounded-full bg-gold/10 blur-[120px]" aria-hidden />
-      <div className={cn(wrap, "relative z-10 pt-24")}>
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease: "easeOut" }} className="max-w-3xl">
+      <div className={cn(wrap, "relative z-10 w-full pt-24")}>
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease: "easeOut" }} className="max-w-2xl lg:max-w-[34rem]">
           {c.eyebrow && <p className="mb-6 text-xs uppercase tracking-[0.5em] text-gold">{c.eyebrow}</p>}
-          <h1 id="hero-title" className="gold-text text-5xl leading-[1.05] sm:text-7xl lg:text-8xl">{c.title}</h1>
+          <h1 id="hero-title" className="gold-text text-5xl leading-[1.05] sm:text-6xl lg:text-7xl">{c.title}</h1>
           {c.subtitle && <p className="mt-6 max-w-xl text-lg text-cream/80">{c.subtitle}</p>}
           <div className="mt-10 flex flex-wrap gap-4">
             {c.primaryButtonText && <Button asChild size="lg"><Link href={safeHref(c.primaryButtonLink, "/menu")}>{c.primaryButtonText}<ArrowRight className="h-4 w-4" aria-hidden /></Link></Button>}
@@ -136,6 +138,20 @@ function ProductGrid({ id, c, products, alt }: { id: string; c: Record<string, a
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{products.slice(0, 8).map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}</div>
         <div className="mt-12 text-center"><Button asChild variant="outline"><Link href="/menu">Explore the full menu<ArrowRight className="h-4 w-4" aria-hidden /></Link></Button></div>
       </div>
+    </section>
+  );
+}
+
+function QuoteBanner({ c }: { c: Record<string, any> }) {
+  return (
+    <section className="relative overflow-hidden border-y border-line" aria-label="Quote">
+      {c.image && /* eslint-disable-next-line @next/next/no-img-element */ <img src={safeHref(c.image)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
+      <div className="absolute inset-0 bg-gradient-to-r from-bg/70 via-bg/80 to-bg/70" />
+      <motion.figure {...fade} className="relative mx-auto max-w-3xl px-6 py-20 text-center">
+        <Quote className="mx-auto mb-4 h-7 w-7 text-gold" aria-hidden />
+        <blockquote className="font-serif text-3xl italic leading-snug text-cream sm:text-4xl">{c.text}</blockquote>
+        {c.author && <figcaption className="mt-6 text-xs uppercase tracking-[0.4em] text-gold">— {c.author} —</figcaption>}
+      </motion.figure>
     </section>
   );
 }

@@ -202,6 +202,16 @@ public class AdminUsersController : AdminBase
         return Ok(await Dto(u));
     }
 
+    /// <summary>Manual verification, for when the customer cannot receive the email (e.g. SES not yet in production mode).</summary>
+    [HttpPut("{id:guid}/verify-email")]
+    public async Task<IActionResult> VerifyEmail(Guid id)
+    {
+        var u = await _users.FindByIdAsync(id.ToString()); if (u == null) return NotFound();
+        if (!u.EmailConfirmed) { u.EmailConfirmed = true; await _users.UpdateAsync(u); }
+        await _audit.LogAsync("UserEmailVerifiedByAdmin", "User", id.ToString(), u.Email);
+        return Ok(await Dto(u));
+    }
+
     [HttpPut("{id:guid}/role")]
     public async Task<IActionResult> SetRole(Guid id, SetUserRoleRequest r)
     {

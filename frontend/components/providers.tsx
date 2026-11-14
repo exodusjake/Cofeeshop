@@ -38,7 +38,7 @@ type AuthState = {
   loading: boolean;
   isAdmin: boolean;
   login: (email: string, password: string, rememberMe: boolean) => Promise<User>;
-  register: (fullName: string, email: string, password: string, confirmPassword: string) => Promise<{ requiresEmailConfirmation: boolean; message: string }>;
+  register: (fullName: string, email: string, password: string, confirmPassword: string) => Promise<User>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -68,8 +68,12 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(u);
       return u;
     },
-    register: (fullName, email, password, confirmPassword) =>
-      api.post("/api/auth/register", { fullName, email, password, confirmPassword }),
+    register: async (fullName, email, password, confirmPassword) => {
+      const u = await api.post<User>("/api/auth/register", { fullName, email, password, confirmPassword });
+      resetCsrf(); // signed in by the server: the antiforgery token is now bound to this user
+      setUser(u);
+      return u;
+    },
     logout: async () => {
       try { await api.post("/api/auth/logout"); } finally { resetCsrf(); setUser(null); }
     },

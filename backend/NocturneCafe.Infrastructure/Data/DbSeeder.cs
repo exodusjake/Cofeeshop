@@ -11,6 +11,54 @@ namespace NocturneCafe.Infrastructure.Data;
 
 public static class DbSeeder
 {
+    // Free-to-use Pexels photographs (see docs/PHOTO-CREDITS.md), stored in frontend/public/images/photos.
+    private static string P(int id) => $"/images/photos/{id}.jpg";
+    private static readonly Dictionary<string, int> ProductPhotos = new()
+    {
+        ["Midnight Latte"] = 312418, ["Nocturne Cold Brew"] = 14802987, ["Ébène Mocha"] = 32927828, ["Aurum Caramel Latte"] = 30403484,
+        ["Vanilla Cold Foam"] = 10540639, ["Espresso"] = 14704659, ["Flat White"] = 17467111, ["Matcha Crème"] = 28730007,
+        ["Dark Chocolate"] = 1839882, ["Strawberry Cream Soda"] = 28901490, ["Earl Grey Noir"] = 327136, ["Jasmine Pearl"] = 5168518,
+        ["Almond Croissant"] = 14411697, ["Pain au Chocolat"] = 14565935, ["Cinnamon Brioche"] = 4828314,
+        ["Chocolate Fudge Cake"] = 12115182, ["Basque Burnt Cheesecake"] = 2067436, ["Tiramisu Cup"] = 30128890,
+        ["Truffle Mushroom Toastie"] = 26936274, ["Smoked Chicken Panini"] = 2161638,
+        ["Golden Hour Affogato"] = 12914800, ["Ube Honey Latte"] = 17576001,
+    };
+    private static readonly int[] GalleryPhotos = { 30403484, 9078030, 12115182, 416461, 14802987, 327136 };
+
+    /// <summary>Swaps the original placeholder artwork for photographs, but only where an admin has not already replaced it.</summary>
+    private static async Task UpgradePlaceholderArt(AppDbContext db)
+    {
+        foreach (var p in await db.Products.Where(p => p.ImageUrl != null && p.ImageUrl.StartsWith("/images/products/")).ToListAsync())
+            if (ProductPhotos.TryGetValue(p.Name, out var id)) p.ImageUrl = P(id);
+        foreach (var s in await db.HomepageSections.ToListAsync())
+        {
+            s.ContentJson = s.ContentJson.Replace("/images/hero.svg", P(29784882)).Replace("/images/story.svg", P(9078030));
+            if (s.PublishedContentJson != null) s.PublishedContentJson = s.PublishedContentJson.Replace("/images/hero.svg", P(29784882)).Replace("/images/story.svg", P(9078030));
+        }
+        foreach (var g in await db.GalleryImages.Where(g => g.ImageUrl.StartsWith("/images/gallery-")).ToListAsync())
+        {
+            var n = int.TryParse(new string(g.ImageUrl.Where(char.IsDigit).ToArray()), out var k) ? k : 1;
+            g.ImageUrl = P(GalleryPhotos[(n - 1) % GalleryPhotos.Length]);
+        }
+        foreach (var pr in await db.Promotions.Where(x => x.ImageUrl != null && x.ImageUrl.StartsWith("/images/products/")).ToListAsync())
+            pr.ImageUrl = P(pr.Code == "NIGHTOWL" ? 12115182 : 312418);
+
+        // New "quote" banner section (added after Signature) for databases seeded before it existed.
+        if (!await db.HomepageSections.AnyAsync(s => s.Key == "quote"))
+        {
+            const int at = 6;
+            foreach (var s in await db.HomepageSections.Where(s => s.SortOrder >= at).ToListAsync()) { s.SortOrder++; if (s.PublishedSortOrder >= at) s.PublishedSortOrder++; }
+            var json = QuoteJson();
+            db.HomepageSections.Add(new HomepageSection { Key = "quote", Name = "Quote Banner", SortOrder = at, IsEnabled = true, ContentJson = json, PublishedSortOrder = at, PublishedIsEnabled = true, PublishedContentJson = json });
+        }
+        await db.SaveChangesAsync();
+    }
+
+    private static string QuoteJson() => JsonSerializer.Serialize(new
+    {
+        text = "A place where coffee, ambiance, and the night come together.", author = "Nocturne Café", image = P(13737042),
+    }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
     public static async Task InitializeAsync(IServiceProvider sp)
     {
         using var scope = sp.CreateScope();
@@ -36,6 +84,7 @@ public static class DbSeeder
             await SeedCatalog(db);
             await SeedCms(db);
             await SeedMisc(db);
+            await UpgradePlaceholderArt(db);
         }
 
         // Secure bootstrap of the first administrator: credentials come from environment / secret store only.
@@ -146,6 +195,7 @@ public static class DbSeeder
                 ("story", "Our Story", new { title = "Our Story", body = "Nocturne began as a midnight experiment: could a coffee shop feel like a candle-lit lounge and still pour the best espresso in the city? Years later, the answer lives in every cup — dark roasts, golden light and a quiet corner waiting for you.\n\nWe roast in small batches, bake every morning and keep the lights low so the flavours can speak.", image = "/images/story.svg" }),
                 ("featured", "Featured Products", new { title = "Featured Favorites", subtitle = "Hand-picked by our baristas." }),
                 ("signature", "Signature Coffee Collection", new { title = "The Signature Collection", subtitle = "Our most-loved creations, poured nightly." }),
+                ("quote", "Quote Banner", JsonSerializer.Deserialize<JsonElement>(QuoteJson())),
                 ("gallery", "Gallery", new { title = "Moments After Dark", subtitle = "A glimpse of life inside Nocturne." }),
                 ("promotions", "Promotions", new { title = "Tonight's Offers", subtitle = "Limited-time treats for our guests.", message = "Free delivery on orders over ₱800 this weekend." }),
                 ("reviews", "Customer Reviews", new { title = "Words From Our Guests", subtitle = "What the night crowd says." }),

@@ -56,8 +56,9 @@ public class AuthController : ApiBase
         await _users.AddToRoleAsync(user, Roles.Customer);   // public registration is ALWAYS Customer
         _db.CustomerProfiles.Add(new CustomerProfile { UserId = user.Id });
         await _db.SaveChangesAsync();
-        await SendConfirmation(user);
-        return StatusCode(201, new { requiresEmailConfirmation = _users.Options.SignIn.RequireConfirmedEmail, message = "Account created. Please check your email to verify your address." });
+        // No email step: the new customer is signed in immediately.
+        await _signIn.SignInAsync(user, isPersistent: false);
+        return StatusCode(201, await ToDto(user));
     }
 
     private async Task SendConfirmation(ApplicationUser user)

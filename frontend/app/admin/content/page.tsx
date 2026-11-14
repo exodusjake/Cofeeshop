@@ -18,6 +18,7 @@ const FIELDS: Record<string, FieldDef[]> = {
   story: [{ name: "title", label: "Title" }, { name: "body", label: "Story text", type: "textarea" }, { name: "image", label: "Image", type: "image" }],
   featured: [{ name: "title", label: "Title" }, { name: "subtitle", label: "Subtitle" }],
   signature: [{ name: "title", label: "Title" }, { name: "subtitle", label: "Subtitle" }],
+  quote: [{ name: "text", label: "Quote", type: "textarea" }, { name: "author", label: "Signature line" }, { name: "image", label: "Background photo", type: "image" }],
   gallery: [{ name: "title", label: "Title" }, { name: "subtitle", label: "Subtitle" }],
   promotions: [{ name: "title", label: "Title" }, { name: "subtitle", label: "Subtitle" }, { name: "message", label: "Promotional message (banner)" }],
   reviews: [{ name: "title", label: "Title" }, { name: "subtitle", label: "Subtitle" }],

@@ -20,8 +20,18 @@ export default function MenuPage() {
   const products = useApi<Paged<Product>>(`/api/products${qs({ q: debounced, categoryId: cat, pageSize: 100 })}`);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
-      <SectionHeading eyebrow="Our Menu" title="Crafted for the Night" subtitle="Everything is made to order. Tap a drink to choose your size, temperature and add-ons." />
+    <div>
+      <div className="relative -mt-18 flex h-[22rem] items-end overflow-hidden sm:h-[26rem]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/images/photos/13737042.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/60 to-bg/40" />
+        <div className="relative mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6">
+          <p className="mb-3 text-xs uppercase tracking-[0.4em] text-gold">Our Menu</p>
+          <h1 className="gold-text text-4xl sm:text-6xl">Crafted for the Night</h1>
+          <p className="mt-3 max-w-xl text-cream/80">Everything is made to order. Tap a drink to choose your size, temperature and add-ons.</p>
+        </div>
+      </div>
+    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
 
       <div className="mb-10 flex flex-col gap-5">
         <div className="relative mx-auto w-full max-w-md">
@@ -45,6 +55,7 @@ export default function MenuPage() {
         ) : products.data && products.data.items.length > 0 ? (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{products.data.items.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}</div>
         ) : <EmptyState title="Nothing found" text="Try a different search or category." />}
+    </div>
     </div>
   );
 }
